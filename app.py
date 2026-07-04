@@ -61,5 +61,12 @@ if st.session_state.user_group:
 
 # --- CLASSIFICAÇÃO (VISÍVEL PARA TODOS) ---
 st.subheader("📊 Classificação Geral")
+
 if not st.session_state.palpites.empty:
-    st.table(st.session_state.palpites.groupby("Nome")["Pontos"].sum().sort_values(ascending=False))
+    # Agrupa e soma os pontos
+    ranking = st.session_state.palpites.groupby(["Nome", "Grupo"])["Pontos"].sum().sort_values(ascending=False).reset_index()
+    # Adiciona a coluna de posição
+    ranking.index = range(1, len(ranking) + 1)
+    st.table(ranking)
+else:
+    st.info("Nenhum palpite registrado ainda. Seja o primeiro a participar!")
