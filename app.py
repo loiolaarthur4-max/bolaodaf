@@ -14,9 +14,24 @@ def carregar(file, cols):
     if os.path.exists(file): return pd.read_csv(file)
     return pd.DataFrame(columns=cols)
 
+# --- CARREGAMENTO DE DADOS COM SEGURANÇA ---
+def carregar(file, cols):
+    if os.path.exists(file):
+        df = pd.read_csv(file)
+        # Garante que as colunas existam mesmo se o arquivo estiver vazio
+        for col in cols:
+            if col not in df.columns:
+                df[col] = ""
+        return df
+    return pd.DataFrame(columns=cols)
+
 # Carrega os dados para o estado da sessão
-if 'palpites' not in st.session_state: st.session_state.palpites = carregar(PALPITES_FILE, ["Nome", "Grupo", "Jogo", "Palpite", "Pontos"])
-if 'jogos' not in st.session_state: st.session_state.jogos = carregar(JOGOS_FILE, ["Nome_Jogo", "Status"])
+if 'palpites' not in st.session_state: 
+    st.session_state.palpites = carregar(PALPITES_FILE, ["Nome", "Grupo", "Jogo", "Palpite", "Pontos"])
+if 'jogos' not in st.session_state: 
+    st.session_state.jogos = carregar(JOGOS_FILE, ["Nome_Jogo", "Status"])
+if 'part' not in st.session_state: 
+    st.session_state.part = carregar(PARTICIPANTES_FILE, ["Nome", "Grupo"])
 if 'part' not in st.session_state: st.session_state.part = carregar(PARTICIPANTES_FILE, ["Nome", "Grupo"])
 
 # --- LOGIN PERSISTENTE ---
