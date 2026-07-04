@@ -2,95 +2,112 @@ import streamlit as st
 import pandas as pd
 
 # Configuração da página
-st.set_page_config(page_title="Bolão da Família - 2026", layout="wide")
+st.set_page_config(page_title="Bolão da Família 2026", layout="wide")
 
-# Inicialização dos estados
+# --- INICIALIZAÇÃO DE ESTADO ---
 if 'palpites' not in st.session_state:
     st.session_state.palpites = pd.DataFrame(columns=["Nome", "Jogo", "Palpite", "Pontos"])
-if 'jogos_ativos' not in st.session_state:
-    st.session_state.jogos_ativos = []
-if 'resultados_oficiais' not in st.session_state:
-    st.session_state.resultados_oficiais = {}
+if 'jogos' not in st.session_state:
+    st.session_state.jogos = {}  # Formato: {"Brasil x Argentina": "Aberto"}
+if 'resultados' not in st.session_state:
+    st.session_state.resultados = {}  # Formato: {"Brasil x Argentina": "2x1"}
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
 
-st.title("⚽ Bolão da Família - Copa do Mundo 2026")
+st.title("⚽ Bolão da Família - Copa 2026")
 
-# --- LOGIN DO ADMIN (DAVI) ---
+# --- PAINEL DO ADMIN (DAVI) ---
 st.sidebar.header("🔐 Área do Administrador")
-senha = st.sidebar.text_input("Senha do Davi", type="password")
-
-if senha == "davi2203":
-    st.sidebar.success("Logado como Davi (Admin)")
+if not st.session_state.logged_in:
+    senha = st.sidebar.text_input("Senha do Davi", type="password")
+    if st.sidebar.button("Entrar"):
+        if senha == "davi2203":
+            st.session_state.logged_in = True
+            st.rerun()
+        else:
+            st.sidebar.error("Senha incorreta!")
+else:
+    if st.sidebar.button("Sair da Conta"):
+        st.session_state.logged_in = False
+        st.rerun()
+    
     st.subheader("🛠️ Painel de Controle do Davi")
     
-    # Gerenciar Jogos
-    col1, col2 = st.columns(2)
-    with col1:
-        novo_jogo = st.text_input("Adicionar novo jogo (ex: Brasil x Argentina)")
-        if st.button("Adicionar Jogo"):
-            if novo_jogo not in st.session_state.jogos_ativos:
-                st.session_state.jogos_ativos.append(novo_jogo)
-                st.rerun()
-    with col2:
-        remover = st.selectbox("Remover jogo:", st.session_state.jogos_ativos)
-        if st.button("Remover Jogo"):
-            st.session_state.jogos_ativos.remove(remover)
-            st.rerun()
+    # Criar Jogo
+    novo_jogo = st.text_input("Novo Jogo (ex: Brasil x Argentina)")
+    if st.button("Adicionar Jogo"):
+        st.session_state.jogos[novo_jogo] = "Aberto"
+        st.rerun()
 
-    # Definir/Editar Resultados
-    st.markdown("---")
-    st.subheader("🏁 Definir ou Editar Resultados")
-    jogo_apurar = st.selectbox("Selecione o jogo para dar o placar:", st.session_state.jogos_ativos)
-    placar_oficial = st.text_input("Placar oficial (ex: 2x1)", value=st.session_state.resultados_oficiais.get(jogo_apurar, ""))
-    
-    if st.button("Salvar e Recalcular Pontos"):
-        st.session_state.resultados_oficiais[jogo_apurar] = placar_oficial
+    # Gerir Status e Resultado
+    if st.session_state.jogos:
+        jogo_sel = st.selectbox("Selecione o Jogo:", list(st.session_state.jogos.keys()))
+        status_novo = st.radio("Status do Jogo:", ["Aberto", "Em Andamento", "Encerrado"], 
+                               index=["Aberto", "Em Andamento", "Encerrado"].index(st.session_state.jogos[jogo_sel]))
         
-        # Resetar pontos para recalcular
-        st.session_state.palpites["Pontos"] = 0
+        placar_real = st.text_input("Placar Oficial (Definir ao Encerrar):", value=st.session_state.resultados.get(jogo_sel, ""))
         
-        # Recálculo total
-        for jogo, resultado in st.session_state.resultados_oficiais.items():
-            mask = st.session_state.palpites["Jogo"] == jogo
-            for index, row in st.session_state.palpites[mask].iterrows():
-                # Lógica de pontos
-                if row["Palpite"] == resultado:
-                    pts = 5
-                elif "ganhou" in row["Palpite"] or "perdeu" in row["Palpite"]:
-                    pts = 3
-                else:
-                    pts = -3
-                
-                # Regra de penalidade (se >= 50 pontos)
-                pts_atuais = st.session_state.palpites.at[index, "Pontos"]
-                novo_total = pts_atuais + pts
-                
-                # Aplica desconto se já tinha 50+
-                if pts_atuais >= 50 and pts == -3:
-                    novo_total -= 3
-                
-                st.session_state.palpites.at[index, "Pontos"] = max(0, novo_total)
-        st.success("Placar salvo e pontuação recalculada!")
+        if st.button("Salvar Alterações"):
+            st.session_state.jogos[jogo_sel] = status_novo
+            st.session_state.resultados[jogo_sel] = placar_real
+            
+            # Se for encerrado, calcula os pontos
+            if status_novo == "Encerrado":
+                mask = st.session_state.palpites["Jogo"] == jogo_sel
+                for idx, row in st.session_state.palpites[mask].iterrows():
+                    # Regras de Pontuação
+                    if row["Palpite"] == placar_real:
+                        pts = 5
+                    elif "vitoria" in row["Palpite"].lower() or "vence" in row["Palpite"].lower(): # Exemplo de lógica
+                        pts = 3
+                    else:
+                        pts = -3
+                    
+                    # Regra: se >= 50, perde 3 extra, nunca abaixo de 0
+                    atual = st.session_state.palpites.at[idx, "Pontos"]
+                    novo = atual + pts
+                    if atual >= 50 and pts == -3: novo -= 3
+                    st.session_state.palpites.at[idx, "Pontos"] = max(0, novo)
+            st.success("Configurações salvas e pontos recalculados!")
 
 # --- REGISTRO DE PALPITES (FAMÍLIA) ---
-st.subheader("📝 Registre seu Palpite")
-with st.form("form_palpite"):
-    nome = st.selectbox("Quem é você?", ["Davi", "Arthur", "Victor", "Kharla", "Renan", "Fabio", "Tio Israel", "Tia Socorro", "Constantino", "Juliane", "Tino"])
-    jogo = st.selectbox("Qual jogo?", st.session_state.jogos_ativos)
-    palpite = st.text_input("Seu palpite (ex: 2x1)")
-    
-    if st.form_submit_button("Enviar Palpite"):
-        if jogo and palpite:
-            nova_linha = {"Nome": nome, "Jogo": jogo, "Palpite": palpite, "Pontos": 0}
-            st.session_state.palpites = pd.concat([st.session_state.palpites, pd.DataFrame([nova_linha])], ignore_index=True)
-            st.success(f"Palpite de {nome} para {jogo} registrado!")
-        else:
-            st.error("Preencha o jogo e o palpite!")
+st.subheader("📝 Registrar Palpite")
+jogos_abertos = [j for j, s in st.session_state.jogos.items() if s == "Aberto"]
 
-# --- RANKING ---
-st.subheader("📊 Ranking do Bolão")
-if not st.session_state.palpites.empty:
-    ranking = st.session_state.palpites.groupby("Nome")["Pontos"].sum().reset_index()
-    ranking = ranking.sort_values(by="Pontos", ascending=False)
-    st.table(ranking)
+if jogos_abertos:
+    with st.form("form_palpite", clear_on_submit=True):
+        nome = st.selectbox("Quem é você?", ["Davi", "Arthur", "Victor", "Kharla", "Renan", "Fabio", "Tio Israel", "Tia Socorro", "Constantino", "Juliane", "Tino"])
+        jogo = st.selectbox("Qual jogo?", jogos_abertos)
+        palpite = st.text_input("Seu placar (ex: 2x1)")
+        
+        if st.form_submit_button("Enviar Palpite"):
+            # Trava de segurança (já votou?)
+            ja_votou = ((st.session_state.palpites["Nome"] == nome) & (st.session_state.palpites["Jogo"] == jogo)).any()
+            if ja_votou:
+                st.error("❌ Você já palpitou neste jogo! Não é permitido alterar.")
+            else:
+                nova_linha = {"Nome": nome, "Jogo": jogo, "Palpite": palpite, "Pontos": 0}
+                st.session_state.palpites = pd.concat([st.session_state.palpites, pd.DataFrame([nova_linha])], ignore_index=True)
+                st.success("✅ Palpite registrado!")
 else:
-    st.info("Nenhum palpite registrado ainda.")
+    st.info("Não há jogos abertos para palpites no momento.")
+
+# --- VISUALIZAÇÃO ---
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("📜 Histórico de Palpites")
+    st.table(st.session_state.palpites[["Nome", "Jogo", "Palpite"]])
+
+with col2:
+    st.subheader("📊 Classificação")
+    if not st.session_state.palpites.empty:
+        rank = st.session_state.palpites.groupby("Nome")["Pontos"].sum().reset_index()
+        rank = rank.sort_values(by="Pontos", ascending=False).reset_index(drop=True)
+        rank.index = rank.index + 1
+        st.table(rank)
+    else:
+        st.write("Ranking vazio.")
+
+st.subheader("📍 Status dos Jogos")
+st.write(pd.DataFrame(list(st.session_state.jogos.items()), columns=["Jogo", "Status"]))
