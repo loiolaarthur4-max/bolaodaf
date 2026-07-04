@@ -4,71 +4,43 @@ import os
 
 st.set_page_config(page_title="Bolão da Família 2026", layout="wide")
 
-# --- BANCO DE DADOS (CARREGAMENTO) ---
+# --- CARREGAR DADOS ---
 if os.path.exists("bolao.csv"):
     st.session_state.palpites = pd.read_csv("bolao.csv")
 else:
     st.session_state.palpites = pd.DataFrame(columns=["Nome", "Grupo", "Jogo", "Palpite", "Pontos"])
 
-if 'jogos' not in st.session_state: st.session_state.jogos = {}
+# --- LOGIN E ADMIN ---
+st.sidebar.header("🔐 Acesso")
+tipo_login = st.sidebar.radio("Tipo:", ["Membro", "Administrador"])
 
-# --- FUNÇÃO PARA SALVAR ---
-def salvar():
-    st.session_state.palpites.to_csv("bolao.csv", index=False)
-
-# --- LOGIN ---
-st.sidebar.header("🔐 Login")
-tipo_login = st.sidebar.radio("Como deseja acessar?", ["Membro de Grupo", "Administrador"])
-
-# --- ADMIN ---
 if tipo_login == "Administrador":
-    senha_adm = st.sidebar.text_input("Senha do Administrador", type="password")
-    if senha_adm == "davi2203":
-        st.sidebar.success("Acesso Admin Liberado")
+    senha = st.sidebar.text_input("Senha Admin", type="password")
+    if senha == "davi2203":
         st.subheader("🛠️ Painel do Administrador (Davi)")
+        novo_jogo = st.text_input("Novo Jogo")
+        if st.button("Criar Jogo"): 
+            if 'jogos' not in st.session_state: st.session_state.jogos = []
+            st.session_state.jogos.append(novo_jogo)
         
-        novo_jogo = st.text_input("Adicionar Jogo")
-        if st.button("Criar Jogo"):
-            st.session_state.jogos[novo_jogo] = "Aberto"
-        
-        # Gestão de Jogos e Ajuste de Ranking
-        st.write("Jogos Ativos:", st.session_state.jogos)
-        
-        nome_ajuste = st.selectbox("Ajustar Pontos de:", ["Davi", "Arthur", "Victor", "Kharla", "Renan", "Fabio", "Tio Israel", "Tia Socorro", "Constantino", "Juliane", "Tino"])
-        pts_ajuste = st.number_input("Novo total de pontos:", value=0)
-        if st.button("Atualizar Pontuação"):
-            st.session_state.palpites.loc[st.session_state.palpites["Nome"] == nome_ajuste, "Pontos"] = pts_ajuste
-            salvar()
+        # Ajuste de Pontos
+        nome_ajuste = st.selectbox("Ajustar Pontos de:", st.session_state.palpites["Nome"].unique() if not st.session_state.palpites.empty else [])
+        novo_pts = st.number_input("Pontos:", value=0)
+        if st.button("Salvar Pontos"):
+            st.session_state.palpites.loc[st.session_state.palpites["Nome"] == nome_ajuste, "Pontos"] = novo_pts
+            st.session_state.palpites.to_csv("bolao.csv", index=False)
             st.rerun()
-    else:
-        st.warning("Insira a senha do Admin na barra lateral.")
 
-# --- MEMBRO DE GRUPO ---
-else:
-    grupo_sel = st.selectbox("Seu Grupo:", ["Grupo 1", "Grupo 2", "Grupo 3"])
-    senha_gp = st.text_input("Senha do Grupo", type="password")
-    senhas = {"Grupo 1": "vitones", "Grupo 2": "raelzinho", "Grupo 3": "tininho"}
-    
-    if senha_gp == senhas.get(grupo_sel):
-        st.success(f"Logado como {grupo_sel}")
-        participantes = {"Grupo 1": ["Davi", "Arthur", "Victor", "Kharla"], 
-                         "Grupo 2": ["Renan", "Fabio", "Tio Israel", "Tia Socorro"],
-                         "Grupo 3": ["Constantino", "Juliane", "Tino"]}
-        
-        nome = st.selectbox("Seu nome:", participantes[grupo_sel])
-        jogo = st.selectbox("Jogo:", list(st.session_state.jogos.keys()))
-        palpite = st.text_input("Seu palpite:")
-        
-        if st.button("Enviar Palpite"):
-            nova = pd.DataFrame([[nome, grupo_sel, jogo, palpite, 0]], columns=["Nome", "Grupo", "Jogo", "Palpite", "Pontos"])
-            st.session_state.palpites = pd.concat([st.session_state.palpites, nova], ignore_index=True)
-            salvar()
-            st.success("Palpite enviado!")
-
-# --- CLASSIFICAÇÃO ---
+# --- CLASSIFICAÇÃO (A TABELA QUE VOCÊ QUER VER) ---
 st.subheader("📊 Classificação Geral")
+
 if not st.session_state.palpites.empty:
-    ranking = st.session_state.palpites.groupby(["Nome", "Grupo"])["Pontos"].sum().sort_values(ascending=False).reset_index()
-    st.table(ranking)
+    # Agrupa para mostrar o total de cada um
+    tabela = st.session_state.palpites.groupby(["Nome", "Grupo"])["Pontos"].sum().sort_values(ascending=False).reset_index()
+    # Adiciona a numeração de posição (1º, 2º, 3º...)
+    tabela.insert(0, "Posição", range(1, len(tabela) + 1))
+    st.table(tabela)
 else:
-    st.info("Nenhum palpite registrado ainda.")
+    # Tabela vazia com cabeçalhos para não ficar feio
+    st.write("Nenhum palpite registrado. A tabela aparecerá aqui assim que o primeiro palpite for enviado!")
+    st.table(pd.DataFrame(columns=["Posição", "Nome", "Grupo", "Pontos"]))
