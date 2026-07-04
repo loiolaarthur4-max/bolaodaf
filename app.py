@@ -1,72 +1,74 @@
 import streamlit as st
 import pandas as pd
+import os
 
 st.set_page_config(page_title="Bolão da Família 2026", layout="wide")
 
-# --- BANCO DE DADOS ---
-participantes_db = {
-    "Davi": "Grupo 1", "Arthur": "Grupo 1", "Victor": "Grupo 1", "Kharla": "Grupo 1",
-    "Renan": "Grupo 2", "Fabio": "Grupo 2", "Tio Israel": "Grupo 2", "Tia Socorro": "Grupo 2",
-    "Constantino": "Grupo 3", "Juliane": "Grupo 3", "Tino": "Grupo 3"
-}
+# --- BANCO DE DADOS (CARREGAMENTO) ---
+if os.path.exists("bolao.csv"):
+    st.session_state.palpites = pd.read_csv("bolao.csv")
+else:
+    st.session_state.palpites = pd.DataFrame(columns=["Nome", "Grupo", "Jogo", "Palpite", "Pontos"])
 
-# --- INICIALIZAÇÃO ---
-if 'palpites' not in st.session_state: st.session_state.palpites = pd.DataFrame(columns=["Nome", "Grupo", "Jogo", "Palpite", "Pontos"])
 if 'jogos' not in st.session_state: st.session_state.jogos = {}
-if 'user_group' not in st.session_state: st.session_state.user_group = None
-if 'is_admin' not in st.session_state: st.session_state.is_admin = False
 
-st.title("⚽ Bolão da Família - Copa 2026")
+# --- FUNÇÃO PARA SALVAR ---
+def salvar():
+    st.session_state.palpites.to_csv("bolao.csv", index=False)
 
-# --- LOGIN POR GRUPO / ADMIN ---
-with st.sidebar:
-    st.header("🔐 Login")
-    if not st.session_state.user_group and not st.session_state.is_admin:
-        login_tipo = st.radio("Tipo de Acesso:", ["Membro de Grupo", "Administrador"])
+# --- LOGIN ---
+st.sidebar.header("🔐 Login")
+tipo_login = st.sidebar.radio("Como deseja acessar?", ["Membro de Grupo", "Administrador"])
+
+# --- ADMIN ---
+if tipo_login == "Administrador":
+    senha_adm = st.sidebar.text_input("Senha do Administrador", type="password")
+    if senha_adm == "davi2203":
+        st.sidebar.success("Acesso Admin Liberado")
+        st.subheader("🛠️ Painel do Administrador (Davi)")
         
-        if login_tipo == "Administrador":
-            senha_adm = st.text_input("Senha Admin", type="password")
-            if st.button("Entrar Admin"):
-                if senha_adm == "davi2203": st.session_state.is_admin = True; st.rerun()
-        else:
-            grupo_sel = st.selectbox("Selecione seu Grupo:", ["Grupo 1", "Grupo 2", "Grupo 3"])
-            senha_gp = st.text_input("Senha do Grupo", type="password")
-            if st.button("Entrar"):
-                senhas = {"Grupo 1": "vitones", "Grupo 2": "raelzinho", "Grupo 3": "tininho"}
-                if senha_gp == senhas[grupo_sel]: st.session_state.user_group = grupo_sel; st.rerun()
+        novo_jogo = st.text_input("Adicionar Jogo")
+        if st.button("Criar Jogo"):
+            st.session_state.jogos[novo_jogo] = "Aberto"
+        
+        # Gestão de Jogos e Ajuste de Ranking
+        st.write("Jogos Ativos:", st.session_state.jogos)
+        
+        nome_ajuste = st.selectbox("Ajustar Pontos de:", ["Davi", "Arthur", "Victor", "Kharla", "Renan", "Fabio", "Tio Israel", "Tia Socorro", "Constantino", "Juliane", "Tino"])
+        pts_ajuste = st.number_input("Novo total de pontos:", value=0)
+        if st.button("Atualizar Pontuação"):
+            st.session_state.palpites.loc[st.session_state.palpites["Nome"] == nome_ajuste, "Pontos"] = pts_ajuste
+            salvar()
+            st.rerun()
     else:
-        if st.button("Sair"): st.session_state.user_group = None; st.session_state.is_admin = False; st.rerun()
+        st.warning("Insira a senha do Admin na barra lateral.")
 
-# --- PAINEL ADMIN (DAVI) ---
-if st.session_state.is_admin:
-    st.subheader("🛠️ Ferramentas do Davi")
-    # ... (mesmo código de gerenciamento de jogos e ajuste de pontos de antes)
-    # Adicione aqui as funções de deletar jogo e ajustar ranking do código anterior
-
-# --- PALPITES (APENAS MEMBROS LOGADOS) ---
-if st.session_state.user_group:
-    st.subheader(f"📝 Registrar Palpite - {st.session_state.user_group}")
-    membros = [n for n, g in participantes_db.items() if g == st.session_state.user_group]
+# --- MEMBRO DE GRUPO ---
+else:
+    grupo_sel = st.selectbox("Seu Grupo:", ["Grupo 1", "Grupo 2", "Grupo 3"])
+    senha_gp = st.text_input("Senha do Grupo", type="password")
+    senhas = {"Grupo 1": "vitones", "Grupo 2": "raelzinho", "Grupo 3": "tininho"}
     
-    with st.form("palpite_form"):
-        nome = st.selectbox("Quem é você?", membros)
-        jogos_abertos = [j for j, s in st.session_state.jogos.items() if s == "Aberto"]
-        jogo = st.selectbox("Qual jogo?", jogos_abertos) if jogos_abertos else st.error("Nenhum jogo aberto")
-        palpite = st.text_input("Placar (ex: 2x1)")
+    if senha_gp == senhas.get(grupo_sel):
+        st.success(f"Logado como {grupo_sel}")
+        participantes = {"Grupo 1": ["Davi", "Arthur", "Victor", "Kharla"], 
+                         "Grupo 2": ["Renan", "Fabio", "Tio Israel", "Tia Socorro"],
+                         "Grupo 3": ["Constantino", "Juliane", "Tino"]}
         
-        if st.form_submit_button("Enviar"):
-            nova_linha = {"Nome": nome, "Grupo": st.session_state.user_group, "Jogo": jogo, "Palpite": palpite, "Pontos": 0}
-            st.session_state.palpites = pd.concat([st.session_state.palpites, pd.DataFrame([nova_linha])], ignore_index=True)
+        nome = st.selectbox("Seu nome:", participantes[grupo_sel])
+        jogo = st.selectbox("Jogo:", list(st.session_state.jogos.keys()))
+        palpite = st.text_input("Seu palpite:")
+        
+        if st.button("Enviar Palpite"):
+            nova = pd.DataFrame([[nome, grupo_sel, jogo, palpite, 0]], columns=["Nome", "Grupo", "Jogo", "Palpite", "Pontos"])
+            st.session_state.palpites = pd.concat([st.session_state.palpites, nova], ignore_index=True)
+            salvar()
             st.success("Palpite enviado!")
 
-# --- CLASSIFICAÇÃO (VISÍVEL PARA TODOS) ---
+# --- CLASSIFICAÇÃO ---
 st.subheader("📊 Classificação Geral")
-
 if not st.session_state.palpites.empty:
-    # Agrupa e soma os pontos
     ranking = st.session_state.palpites.groupby(["Nome", "Grupo"])["Pontos"].sum().sort_values(ascending=False).reset_index()
-    # Adiciona a coluna de posição
-    ranking.index = range(1, len(ranking) + 1)
     st.table(ranking)
 else:
-    st.info("Nenhum palpite registrado ainda. Seja o primeiro a participar!")
+    st.info("Nenhum palpite registrado ainda.")
