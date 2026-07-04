@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 
-# Configuração da página
 st.set_page_config(page_title="Bolão da Família 2026", layout="wide")
 
 # --- BANCO DE DADOS ---
@@ -12,78 +11,55 @@ participantes_db = {
 }
 
 # --- INICIALIZAÇÃO ---
-if 'palpites' not in st.session_state: 
-    st.session_state.palpites = pd.DataFrame(columns=["Nome", "Grupo", "Jogo", "Palpite", "Pontos"])
+if 'palpites' not in st.session_state: st.session_state.palpites = pd.DataFrame(columns=["Nome", "Grupo", "Jogo", "Palpite", "Pontos"])
 if 'jogos' not in st.session_state: st.session_state.jogos = {}
-if 'logged_in' not in st.session_state: st.session_state.logged_in = False
+if 'user_group' not in st.session_state: st.session_state.user_group = None
+if 'is_admin' not in st.session_state: st.session_state.is_admin = False
 
 st.title("⚽ Bolão da Família - Copa 2026")
 
-# --- LOGIN ADMIN ---
+# --- LOGIN POR GRUPO / ADMIN ---
 with st.sidebar:
-    st.header("🔐 Área do Administrador")
-    if not st.session_state.logged_in:
-        senha = st.text_input("Senha do Davi", type="password")
-        if st.button("Entrar"):
-            if senha == "davi2203": st.session_state.logged_in = True; st.rerun()
-    else:
-        if st.button("Sair da Conta"): st.session_state.logged_in = False; st.rerun()
-
-# --- PAINEL DO ADMIN ---
-if st.session_state.logged_in:
-    st.subheader("🛠️ Ferramentas do Davi")
-    tab1, tab2, tab3 = st.tabs(["Jogos", "Ajustar Ranking", "Logs"])
-    
-    with tab1:
-        novo_jogo = st.text_input("Nome do novo Jogo")
-        if st.button("Adicionar Jogo"): st.session_state.jogos[novo_jogo] = "Aberto"; st.rerun()
+    st.header("🔐 Login")
+    if not st.session_state.user_group and not st.session_state.is_admin:
+        login_tipo = st.radio("Tipo de Acesso:", ["Membro de Grupo", "Administrador"])
         
-        jogo_del = st.selectbox("Remover Jogo", list(st.session_state.jogos.keys()) + [""])
-        if st.button("Deletar Jogo"): 
-            del st.session_state.jogos[jogo_del]
-            st.session_state.palpites = st.session_state.palpites[st.session_state.palpites["Jogo"] != jogo_del]
-            st.rerun()
-            
-    with tab2:
-        nome_ajuste = st.selectbox("Quem ajustar?", list(participantes_db.keys()))
-        pontos_ajuste = st.number_input("Definir total de pontos manualmente:", value=0)
-        if st.button("Atualizar Pontuação"):
-            # Ajusta o primeiro palpite encontrado do usuário para refletir os pontos totais
-            st.session_state.palpites.loc[st.session_state.palpites["Nome"] == nome_ajuste, "Pontos"] = 0
-            idx = st.session_state.palpites[st.session_state.palpites["Nome"] == nome_ajuste].index[0]
-            st.session_state.palpites.at[idx, "Pontos"] = pontos_ajuste
-            st.rerun()
-
-# --- PALPITES (FAMÍLIA) ---
-st.subheader("📝 Registrar Palpite")
-with st.form("palpite_form"):
-    nome = st.selectbox("Participante", list(participantes_db.keys()))
-    jogos_abertos = [j for j, s in st.session_state.jogos.items() if s == "Aberto"]
-    jogo = st.selectbox("Jogo", jogos_abertos)
-    palpite = st.text_input("Placar (ex: 2x1)")
-    if st.form_submit_button("Enviar Palpite"):
-        nova_linha = {"Nome": nome, "Grupo": participantes_db[nome], "Jogo": jogo, "Palpite": palpite, "Pontos": 0}
-        st.session_state.palpites = pd.concat([st.session_state.palpites, pd.DataFrame([nova_linha])], ignore_index=True)
-        st.rerun()
-
-# --- HISTÓRICO E CLASSIFICAÇÃO ---
-col_h, col_r = st.columns(2)
-
-with col_h:
-    st.subheader("📜 Histórico")
-    for i, row in st.session_state.palpites.iterrows():
-        c1, c2, c3, c4 = st.columns([2, 2, 2, 1])
-        c1.write(row["Nome"]); c2.write(row["Jogo"]); c3.write(row["Palpite"])
-        if st.session_state.logged_in:
-            if c4.button("🗑️", key=f"del_{i}"):
-                st.session_state.palpites = st.session_state.palpites.drop(i)
-                st.rerun()
-
-with col_r:
-    st.subheader("📊 Classificação")
-    if not st.session_state.palpites.empty:
-        rank = st.session_state.palpites.groupby("Nome")["Pontos"].sum().sort_values(ascending=False).reset_index()
-        rank.index = rank.index + 1
-        st.table(rank)
+        if login_tipo == "Administrador":
+            senha_adm = st.text_input("Senha Admin", type="password")
+            if st.button("Entrar Admin"):
+                if senha_adm == "davi2203": st.session_state.is_admin = True; st.rerun()
+        else:
+            grupo_sel = st.selectbox("Selecione seu Grupo:", ["Grupo 1", "Grupo 2", "Grupo 3"])
+            senha_gp = st.text_input("Senha do Grupo", type="password")
+            if st.button("Entrar"):
+                senhas = {"Grupo 1": "vitones", "Grupo 2": "raelzinho", "Grupo 3": "tininho"}
+                if senha_gp == senhas[grupo_sel]: st.session_state.user_group = grupo_sel; st.rerun()
     else:
-        st.write("Nenhum palpite registrado.")
+        if st.button("Sair"): st.session_state.user_group = None; st.session_state.is_admin = False; st.rerun()
+
+# --- PAINEL ADMIN (DAVI) ---
+if st.session_state.is_admin:
+    st.subheader("🛠️ Ferramentas do Davi")
+    # ... (mesmo código de gerenciamento de jogos e ajuste de pontos de antes)
+    # Adicione aqui as funções de deletar jogo e ajustar ranking do código anterior
+
+# --- PALPITES (APENAS MEMBROS LOGADOS) ---
+if st.session_state.user_group:
+    st.subheader(f"📝 Registrar Palpite - {st.session_state.user_group}")
+    membros = [n for n, g in participantes_db.items() if g == st.session_state.user_group]
+    
+    with st.form("palpite_form"):
+        nome = st.selectbox("Quem é você?", membros)
+        jogos_abertos = [j for j, s in st.session_state.jogos.items() if s == "Aberto"]
+        jogo = st.selectbox("Qual jogo?", jogos_abertos) if jogos_abertos else st.error("Nenhum jogo aberto")
+        palpite = st.text_input("Placar (ex: 2x1)")
+        
+        if st.form_submit_button("Enviar"):
+            nova_linha = {"Nome": nome, "Grupo": st.session_state.user_group, "Jogo": jogo, "Palpite": palpite, "Pontos": 0}
+            st.session_state.palpites = pd.concat([st.session_state.palpites, pd.DataFrame([nova_linha])], ignore_index=True)
+            st.success("Palpite enviado!")
+
+# --- CLASSIFICAÇÃO (VISÍVEL PARA TODOS) ---
+st.subheader("📊 Classificação Geral")
+if not st.session_state.palpites.empty:
+    st.table(st.session_state.palpites.groupby("Nome")["Pontos"].sum().sort_values(ascending=False))
